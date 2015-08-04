@@ -4,6 +4,7 @@ import Keys._
 object Dependencies {
   val shapeless = "com.chuusai" %% "shapeless" % "2.2.5"
   val scala_reflect = "org.scala-lang" % "scala-reflect"
+  val macro_paradise = "org.scalamacros" % "paradise" % "2.1.0-M5"
 }
 
 object BuildSettings {
@@ -19,7 +20,9 @@ object BuildSettings {
       "-unchecked",
       "-deprecation"
     ),
-    libraryDependencies += shapeless
+    libraryDependencies += shapeless,
+    libraryDependencies +=
+      compilerPlugin(macro_paradise cross CrossVersion.full)
   )
 }
 

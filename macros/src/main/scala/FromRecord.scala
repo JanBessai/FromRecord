@@ -3,15 +3,22 @@ import shapeless._
 object CaseClassCreator {
     import scala.reflect.macros.whitebox.Context
     import scala.language.experimental.macros
+    import scala.annotation.StaticAnnotation
+    import scala.annotation.compileTimeOnly
 
-    def mkCaseClass[R <: HList]: Any =
-      macro MkCaseClass.mkCaseClassImpl[R]
+    @compileTimeOnly("Run via macro paradise")
+    class FromRecord[R <: HList] extends StaticAnnotation {
+      def macroTransform(annottees: Any*): Any =
+        macro MkCaseClass.mkCaseClassImpl
+    }
 
     class MkCaseClass(val c : Context) extends SingletonTypeUtils {
-      def mkCaseClassImpl[R <: HList](implicit tag: c.universe.WeakTypeTag[R]) = {
+      def mkCaseClassImpl(annottees: c.Expr[Any]*) = {
         import c.universe._
 
-        val rTpe = weakTypeOf[R]
+        val q"new FromRecord[${rTpeTree : Tree}]()" = c.prefix.tree //"
+        val rTpeTreeChecked = c.typecheck(rTpeTree, mode = c.TYPEmode)
+        val rTpe : Type= rTpeTreeChecked.symbol.typeSignature
         val keyTagTpe = typeOf[shapeless.labelled.KeyTag[_, _]]
         val hconsTpe = typeOf[shapeless.::[_, _]]
 
@@ -44,18 +51,12 @@ object CaseClassCreator {
           q"case class $name(..$members)"
         }
 
-        val freshName = c.freshName("CaseClassCreator")
-        val freshTy = TypeName(freshName)
-        val freshTerm = TermName(freshName)
-        val result = c.Expr[Any](
-          q"""
-           class ${freshTy} {
-             ${mkClass(rTpe)}
-           }
-           new ${freshTy}
-          """)
-        println(showCode(result.tree))
-        result
+        annottees.map(_.tree) match {
+          case List(q"object $name extends $parent { ..$body}") if body.isEmpty =>
+            q"object $name extends $parent { ${mkClass(rTpe)} }"
+          case _ => c.abort(c.enclosingPosition,
+            "From record can only be applied to objects with empty bodies")
+        }
       }
     }
 }
